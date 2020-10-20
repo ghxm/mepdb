@@ -184,3 +184,10 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+.idea/.gitignore
+.idea/dataSources.xml
+.idea/inspectionProfiles/
+.idea/mepdb.iml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
