@@ -1,6 +1,6 @@
 # test and download MEP sites on the EU register by bruteforcing MEP IDs
-# @TODO: Logging
-# @TODO: Save to MongoDB and SQL
+# @TODO: Log Stats
+# @TODO: Save to MongoDB
 
 import urllib3
 import sqlite3
@@ -30,6 +30,7 @@ parser.add_argument ("-d", "--download", action="store_true", default=False) # D
 parser.add_argument ("--onlynew", action="store_true", default=False, help="automatically set lower ID range to highest ID in DB")
 parser.add_argument ("--lower", type = int, default=0)
 parser.add_argument ("--upper", type = int, default=999999)
+parser.add_argument("-l", "--limit", type = int, default=0)
 parser.add_argument ("-w", "--wait", type=int, help = "wait in seconds between requests", default=1)
 args = parser.parse_args()
 
@@ -66,11 +67,21 @@ if args.onlynew:
         args.lower = db_mep_ids[-1]
 
 
+if args.limit > 0:
+    args.upper = args.lower + args.limit
+elif args.limit < 0:
+    raise Warning("negative --limit flag equals 0 (no limit)")
+
+
 id_range = range(args.lower, args.upper)
 
 http = urllib3.PoolManager()
 
 def pipeline(id):
+
+    html = None
+    url = None
+
     # save ID to mep.db
     url = config.get('GENERAL', 'mep_register_base_url').format(id=str(id))
     # request
@@ -96,8 +107,7 @@ def pipeline(id):
 
         # save HTML to MongoDB
         if new and args.download:
-            # @TODO: add to MongoDB
-            pass
+            utilities.add_mep_html_mongodb(html = request.data.decode (), url = url, timediff=datetime.timedelta(days=30))
     else:
         log.info('ID ' + str(id) + ': unhandled status code' + str(request.status) + ", ID: " + str(id))
 

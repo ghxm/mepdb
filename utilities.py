@@ -7,6 +7,7 @@ import sys
 import pymongo
 import mongo_proxy
 import logging
+import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(BASE_DIR))
@@ -74,9 +75,57 @@ def connect_sqlite(check_same_thread=False):
 
     return conn
 
-def add_mep_html_mongodb(html, mep_id, url, timestamp, replace, timediff, mdb_db):
+def add_mep_html_mongodb(html, mep_id, url = None, insert_only_update = True, timediff: datetime.timedelta = None, timestamp = None, replace = False, mdb_db = None):
     # @TODO: if timediff large than x between last saved html
     # @TODO: OR if change in HTML code and replace is False
     # @TODO: store in MongoDB
 
-    pass
+    config = get_config()
+
+    if mdb_db is None:
+        mdb_db = connect_mongodb()
+
+    if timestamp is None:
+        timestamp = datetime.datetime.utcnow()
+
+    # select collection
+    mdb_col = mdb_db[config.get('MONGODB', 'col_mep_register_copies')]
+
+    # check if there already exists a MongoDB document with that MEP ID
+    mongodb_mep_ids = list(mdb_col.find({"mep_id": mep_id},{"_id":1, "html": 1, "mep_id": 1, 'timestamp': 1}).sort("timestamp"))
+
+    if len(mongodb_mep_ids) > 0:
+        if timediff is not None:
+            last_copy_timestamp = mongodb_mep_ids[-1].get("timestamp", 0)
+            if (timestamp - last_copy_timestamp)>timediff: # @TODO
+                add_to_mongodb = True
+            else:
+                add_to_mongodb = False
+        elif insert_only_update:
+            # @TODO: check if there have been changes to the HTML
+            pass
+            add_to_mongodb = True
+        else:
+            add_to_mongodb = True
+    else:
+        replace = False
+        add_to_mongodb = True
+
+    if add_to_mongodb:
+        mdb_doc = {'mep_id': mep_id, 'url': url, 'timestamp': timestamp, 'html': html}
+
+        if replace: # update latest saved copy with current information
+            mdb_operation = mdb_col.replace_one({'$query': {"mep_id": mep_id}, '$orderby': {'timestamp': -1}}, mdb_doc, upsert= True)
+            if mdb_operation.modified_count > 1 or mdb_operation.upserted_id is not None:
+                return True
+            else:
+                return False
+        else: # insert new document
+            mdb_operation = mdb_col.insert_one(mdb_doc)
+            if mdb_operation.inserted_id is not None:
+                return True
+            else:
+                return False
+    else:
+        return False
+
