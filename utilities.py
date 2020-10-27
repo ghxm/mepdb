@@ -97,7 +97,7 @@ def add_mep_html_mongodb(html, mep_id, url = None, insert_only_update = True, ti
     if len(mongodb_mep_ids) > 0:
         if timediff is not None:
             last_copy_timestamp = mongodb_mep_ids[-1].get("timestamp", 0)
-            if (timestamp - last_copy_timestamp)>timediff: # @TODO
+            if (timestamp - last_copy_timestamp)>timediff:
                 add_to_mongodb = True
             else:
                 add_to_mongodb = False
