@@ -45,12 +45,14 @@ stored_mdb = mdb_col.aggregate([
 # loop over all documents retrieved from mongodb
 for doc in stored_mdb:
 
+    mep_info = {}
+
     log.info("Parsing document " + str(doc['_id']))
 
-    mep_id = doc['mep_id']
-    timestamp = doc['timestamp']
-    url = doc['url']
-    ep_num = int(re.findall(r'[0-9]+/*$', url)[0])
+    mep_info['mep_id'] = doc['mep_id']
+    mep_info['timestamp'] = doc['timestamp']
+    mep_info['url'] = doc['url']
+    mep_info['ep_num'] = int(re.findall(r'[0-9]+/*$', mep_info['url'])[0])
     html = doc['html']
 
     # @TODO: parse
@@ -62,39 +64,49 @@ for doc in stored_mdb:
 
     # header information parsing
     if mep_header is None:
-        log.error(str(mep_id) + " " + url + " " + "MEP header html not found!")
+        log.error(str(mep_info['mep_id']) + " " + mep_info['url'] + " " + "MEP header html not found!")
     else:
-        mep_name = mep_header.find(class_=re.compile(r'h1')).get_text().strip()
+        try:
+            mep_info['mep_name'] = mep_header.find(class_=re.compile(r'h1')).get_text().strip()
+            if len(mep_info['mep_name']) == 0:
+                raise Exception
+        except:
+            mep_info['mep_name'] = None
 
-        mep_ms = mep_header.find(class_=re.compile(r'h3')).get_text().strip()
+        try:
+            mep_info['mep_ms'] = mep_header.find(class_=re.compile(r'h3')).get_text().strip()
+            if len(mep_info['mep_ms']) == 0:
+                raise Exception
+        except:
+            mep_info['mep_ms'] = None
 
         mep_birthdate_tag = mep_header.find(id="birthDate")
         if mep_birthdate_tag is None:
             mep_birthdate = None
         else:
             if mep_birthdate_tag.get('datetime') is not None and len(mep_birthdate_tag.get('datetime')) > 0:
-                mep_birthdate = mep_birthdate_tag.get('datetime')
+                mep_info['mep_birthdate'] = mep_birthdate_tag.get('datetime')
             else:
-                mep_birthdate = mep_birthdate_tag.get_text().strip() # @TODO parse as datetime
+                mep_info['mep_birthdate'] = mep_birthdate_tag.get_text().strip() # @TODO parse as datetime
 
             try:
-                mep_birthplace = mep_birthdate_tag.parent.get_text().strip().split(",")[1].strip()
+                mep_info['mep_birthplace'] = mep_birthdate_tag.parent.get_text().strip().split(",")[1].strip()
             except:
-                mep_birthplace = None
+                mep_info['mep_birthplace'] = None
 
         mep_deathdate_tag = mep_header.find(id="deathDate")
         if mep_deathdate_tag is None:
-            mep_deathdate = None
+            mep_info['mep_deathdate'] = None
         else:
             if mep_deathdate_tag.get('datetime') is not None and len(mep_deathdate_tag.get('datetime')) > 0:
-                mep_deathdate = mep_deathdate_tag.get('datetime')
+                mep_info['mep_deathdate'] = mep_deathdate_tag.get('datetime')
             else:
-                mep_deathdate = mep_deathdate_tag.get_text().strip()  # @TODO parse as datetime
+                mep_info['mep_deathdate'] = mep_deathdate_tag.get_text().strip()  # @TODO parse as datetime
 
 
-    # term activity parsing
+    # @TODO: term activity parsing
     if mep_term is None:
-        log.error(str(mep_id) + " " + url + " " + "MEP term activity html not found!")
+        log.error(str(mep_info['mep_id']) + " " + mep_info['mep_url'] + " " + "MEP term activity html not found!")
     else:
         pass
 
