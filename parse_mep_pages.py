@@ -43,6 +43,9 @@ stored_mdb = mdb_col.aggregate([
   }}
 ], allowDiskUse = True)
 
+# @DEBUG
+# stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/96999/ALEXANDER_MIRSKY/history/7"})
+
 list_mep_attributes = []
 list_mep_roles = []
 
@@ -181,7 +184,11 @@ for doc in stored_mdb:
                         entity_split = entity_text.rsplit("- ")
                         role_item['entity'] = entity_split[0].strip()
                         try:
-                            role_item['role'] = entity_split[1].lower().strip()
+                            if role_item['entity'] is None or (role_item['entity'] is not None and len(role_item['entity'])) == 0:
+                                role_item['role'] = None
+                                role_item['entity'] = entity_split[1].strip()
+                            else:
+                                role_item['role'] = entity_split[1].lower().strip()
                         except:
                             pass
                         if role_item['role'] is None:
@@ -199,7 +206,7 @@ for doc in stored_mdb:
 
                     list_mep_roles.append(role_item)
 
-log.info ("Creating pandas dtaframes...")
+log.info ("Creating pandas dataframes...")
 # create empty pandas df
 df_attributes = pd.DataFrame(columns=['mep_id', 'timestamp', 'name', 'ms', 'birthdate', 'birthplace', 'deathdate'])
 df_roles = pd.DataFrame(columns=['mep_id', 'url', 'timestamp', 'ep_num', 'start_date', 'end_date', 'role', 'entity', 'entity_type'])
@@ -222,8 +229,9 @@ df_attributes[["birthdate", "deathdate"]] = df_attributes[["birthdate", "deathda
 df_roles[["start_date", "end_date"]] = df_roles[["start_date", "end_date"]].apply(pd.to_datetime, errors='ignore')
 
 ## @DEBUG: to csv
-#df_attributes.to_csv("attributes.csv")
-#df_roles.to_csv("roles.csv")
+log.info("Writing dataframes to csv for debugging")
+df_attributes.to_csv("attributes.csv")
+df_roles.to_csv("roles.csv")
 
 # df to sql, replace accordingly
 try:
