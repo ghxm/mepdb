@@ -1,5 +1,4 @@
-# @TODO: logging
-# @TODO: parallelize
+# @TODO: command-line arguments
 import datetime
 import time
 import joblib
@@ -181,18 +180,20 @@ for doc in stored_mdb:
                                        "national_parties": "national party"}
                         role_item['type'] = entity_type_dict[section_name]
                         # get role from entity text
-                        entity_split = entity_text.rsplit("- ")
-                        role_item['entity'] = entity_split[0].strip()
-                        try:
-                            if role_item['entity'] is None or (role_item['entity'] is not None and len(role_item['entity'])) == 0:
-                                role_item['role'] = None
-                                role_item['entity'] = entity_split[1].strip()
-                            else:
+                        if role_item['type'] == "political group":
+                            entity_split = entity_text.rsplit("- ", maxsplit = 1)
+                            role_item['entity'] = entity_split[0].strip()
+                            try:
                                 role_item['role'] = entity_split[1].lower().strip()
-                        except:
-                            pass
-                        if role_item['role'] is None:
+                            except:
+                                pass
+                            #if role_item['role'] is None:
+                            #    role_item['role'] = "member"
+                        if role_item['type'] == "national party":
                             role_item['role'] = "member"
+                            role_item['entity'] = entity_text.strip()
+                            if role_item['entity'].strip().startswith("(") and role_item['entity'].strip().endswith(")"):
+                                role_item['entity'] = "None"
                     else:
                         role_item['role'] = section_name.strip()
                         role_item['entity'] = entity_text.strip()
@@ -229,9 +230,9 @@ df_attributes[["birthdate", "deathdate"]] = df_attributes[["birthdate", "deathda
 df_roles[["start_date", "end_date"]] = df_roles[["start_date", "end_date"]].apply(pd.to_datetime, errors='ignore')
 
 ## @DEBUG: to csv
-log.info("Writing dataframes to csv for debugging")
-df_attributes.to_csv("attributes.csv")
-df_roles.to_csv("roles.csv")
+log.debug("Writing dataframes to csv for debugging")
+df_attributes.to_csv(os.path.join(BASE_DIR, "dataset/attributes.csv"))
+df_roles.to_csv(os.path.join(BASE_DIR, "dataset/roles.csv"))
 
 # df to sql, replace accordingly
 try:
