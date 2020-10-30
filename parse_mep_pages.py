@@ -43,7 +43,7 @@ stored_mdb = mdb_col.aggregate([
 ], allowDiskUse = True)
 
 # @DEBUG
-#stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/119431/RUZA_TOMASIC/history/9"})
+#stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/4244/PATSY_SORENSEN/history/5"})
 
 eu_countries = ["Austria","Belgium", "Bulgaria","Croatia","Cyprus",
                   "Czech Republic","Czechia","Denmark","Estonia","Finland","France","Germany",
@@ -202,7 +202,8 @@ for doc in stored_mdb:
                             role_item['role'] = "member"
                             role_item['entity'] = entity_text.strip()
                             no_party_terms = ["parteilos", "no party", "sans étiquette", "sem partido", "independent", "independente", "indipindente", "indépendant", "Løsgænger", "Onafhankelijk", "Onafhankelijk lid", "Non party", "NEZÁVISLÍ"]
-                            if any([re.search(no_party + "\s*[-]*\s*(?:\(|$)", role_item['entity'], flags=re.IGNORECASE) is not None for no_party in no_party_terms]) in no_party_terms or (role_item['entity'].strip().startswith("(") or role_item['entity'].strip().startswith("-")) and role_item['entity'].strip().endswith(")"):
+                            if any([re.search(no_party + "\s*[-]*\s*(?:\(|$)", role_item['entity'], flags=re.IGNORECASE) is not None for no_party in no_party_terms]) or\
+                                    ((role_item['entity'].strip().startswith("(") or role_item['entity'].strip().startswith("-")) and role_item['entity'].strip().endswith(")")):
                                 role_item['entity'] = re.sub("|".join(no_party_terms), "", role_item['entity'], flags=re.IGNORECASE)
                                 role_item['entity'] = "None" + role_item['entity'].replace("-", " " , 1).replace("  ", " ")
 
