@@ -28,6 +28,8 @@ parser.add_argument('format', type=str, default = "json")
 
 class Meps(Resource):
     def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('format', type=str, default="json")
         args = parser.parse_args()
         # Connect to databse
         conn = e.connect()
