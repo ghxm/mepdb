@@ -43,7 +43,14 @@ stored_mdb = mdb_col.aggregate([
 ], allowDiskUse = True)
 
 # @DEBUG
-# stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/96999/ALEXANDER_MIRSKY/history/7"})
+#stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/119431/RUZA_TOMASIC/history/9"})
+
+eu_countries = ["Austria","Belgium", "Bulgaria","Croatia","Cyprus",
+                  "Czech Republic","Czechia","Denmark","Estonia","Finland","France","Germany",
+                  "Greece","Hungary","Ireland","Italy","Latvia","Lithuania",
+                  "Luxembourg", "Malta","Netherlands", "Poland","Portugal","Romania",
+                  "Slovakia","Slovenia","Spain","Sweden", "United Kingdom"]
+eu_regex = "|".join([str(country) for country in eu_countries])
 
 list_mep_attributes = []
 list_mep_roles = []
@@ -80,9 +87,11 @@ for doc in stored_mdb:
             mep_attributes['name'] = None
 
         try:
-            mep_attributes['ms'] = mep_header.find(class_=re.compile(r'h3')).get_text().strip()
-            if len(mep_attributes['ms']) == 0:
+            h3_ms_tags = mep_header.find_all(class_=re.compile(r'h3'), text=re.compile(eu_regex, flags=re.IGNORECASE))
+            if len(h3_ms_tags) == 0:
                 raise Exception
+            else:
+                mep_attributes['ms'] = h3_ms_tags[0].get_text().strip()
         except:
             mep_attributes['ms'] = None
 
