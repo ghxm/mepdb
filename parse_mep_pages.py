@@ -91,7 +91,7 @@ for doc in stored_mdb:
             if len(h3_ms_tags) == 0:
                 raise Exception
             else:
-                mep_attributes['ms'] = h3_ms_tags[0].get_text().strip()
+                mep_attributes['ms'] = re.search(eu_regex, h3_ms_tags[0].get_text().strip(), flags=re.IGNORECASE)[0]
         except:
             mep_attributes['ms'] = None
 
