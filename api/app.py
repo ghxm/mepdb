@@ -26,7 +26,7 @@ api = Api(app)
 parser = reqparse.RequestParser()
 parser.add_argument('format', type=str, default = "json")
 
-class Meps(Resource):
+class Attributes(Resource):
     def get(self):
 
         args = parser.parse_args()
@@ -36,6 +36,42 @@ class Meps(Resource):
         #query = conn.execute("select * from attributes")
 
         df = pd.read_sql_query("select * from attributes", conn)
+
+        if args['format'] == "csv":
+            return original_flask_make_response(df.to_csv())
+        else:
+            return original_flask_make_response(df.to_json(orient="records"))
+
+        #return {'meps': [dict(zip(tuple(query.keys()), i)) for i in query.cursor]}
+
+class Roles(Resource):
+    def get(self):
+
+        args = parser.parse_args()
+        # Connect to databse
+        conn = e.connect()
+        # Perform query and return JSON data
+        #query = conn.execute("select * from attributes")
+
+        df = pd.read_sql_query("select * from roles", conn)
+
+        if args['format'] == "csv":
+            return original_flask_make_response(df.to_csv())
+        else:
+            return original_flask_make_response(df.to_json(orient="records"))
+
+        #return {'meps': [dict(zip(tuple(query.keys()), i)) for i in query.cursor]}
+
+class Meps(Resource):
+    def get(self):
+
+        args = parser.parse_args()
+        # Connect to databse
+        conn = e.connect()
+        # Perform query and return JSON data
+        #query = conn.execute("select * from attributes")
+
+        df = pd.read_sql_query("select * from attributes LEFT JOIN roles ON attributes.mep_id = roles.mep_id", conn)
 
         if args['format'] == "csv":
             return original_flask_make_response(df.to_csv())
@@ -56,6 +92,8 @@ class Meps_Detail(Resource):
         return result
         # We can have PUT,DELETE,POST here. But in our API GET implementation is sufficient
 
+api.add_resource(Attributes, '/meps/attributes')
+api.add_resource(Roles, '/meps/roles')
 api.add_resource(Meps, '/meps')
 api.add_resource(Meps_Detail, '/meps/<string:mep_id>')
 
