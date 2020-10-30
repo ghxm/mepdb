@@ -201,8 +201,9 @@ for doc in stored_mdb:
                         if role_item['type'] == "national party":
                             role_item['role'] = "member"
                             role_item['entity'] = entity_text.strip()
-                            if role_item['entity'].strip().startswith("(") and role_item['entity'].strip().endswith(")"):
-                                role_item['entity'] = "None"
+                            if "parteilos" in role_item['entity'] or (role_item['entity'].strip().startswith("(") or role_item['entity'].strip().startswith("-")) and role_item['entity'].strip().endswith(")"):
+                                role_item['entity'] = "None" + role_item['entity'].replace("-", " " , 1).replace("  ", " ")
+
                     else:
                         role_item['role'] = section_name.strip()
                         role_item['entity'] = entity_text.strip()
