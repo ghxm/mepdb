@@ -8,6 +8,7 @@ import sys
 import re
 import pandas as pd
 import argparse
+import dateutil.parser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(BASE_DIR))
@@ -43,7 +44,7 @@ stored_mdb = mdb_col.aggregate([
 ], allowDiskUse = True)
 
 # @DEBUG
-#stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/4244/PATSY_SORENSEN/history/5"})
+# stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/1/GEORG_JARZEMBOWSKI/history/3"})
 
 eu_countries = ["Austria","Belgium", "Bulgaria","Croatia","Cyprus",
                   "Czech Republic","Czechia","Denmark","Estonia","Finland","France","Germany",
@@ -95,28 +96,28 @@ for doc in stored_mdb:
         except:
             mep_attributes['ms'] = None
 
-        mep_birthdate_tag = mep_header.find(id="birthDate")
-        if mep_birthdate_tag is None:
-            mep_birthdate = None
+        mep_date_birth_tag = mep_header.find(id="birthDate")
+        if mep_date_birth_tag is None:
+            mep_date_birth = None
         else:
-            if mep_birthdate_tag.get('datetime') is not None and len(mep_birthdate_tag.get('datetime')) > 0:
-                mep_attributes['birthdate'] = mep_birthdate_tag.get('datetime')
+            if mep_date_birth_tag.get('datetime') is not None and len(mep_date_birth_tag.get('datetime')) > 0:
+                mep_attributes['date_birth'] = mep_date_birth_tag.get('datetime')
             else:
-                mep_attributes['birthdate'] = mep_birthdate_tag.get_text().strip() # @TODO parse as datetime
+                mep_attributes['date_birth'] = mep_date_birth_tag.get_text().strip() # @TODO parse as datetime
 
             try:
-                mep_attributes['birthplace'] = mep_birthdate_tag.parent.get_text().strip().split(",")[1].strip()
+                mep_attributes['place_birth'] = mep_date_birth_tag.parent.get_text().strip().split(",")[1].strip()
             except:
-                mep_attributes['birthplace'] = None
+                mep_attributes['place_birth'] = None
 
-        mep_deathdate_tag = mep_header.find(id="deathDate")
-        if mep_deathdate_tag is None:
-            mep_attributes['deathdate'] = None
+        mep_date_death_tag = mep_header.find(id="date_death")
+        if mep_date_death_tag is None:
+            mep_attributes['date_death'] = None
         else:
-            if mep_deathdate_tag.get('datetime') is not None and len(mep_deathdate_tag.get('datetime')) > 0:
-                mep_attributes['deathdate'] = mep_deathdate_tag.get('datetime')
+            if mep_date_death_tag.get('datetime') is not None and len(mep_date_death_tag.get('datetime')) > 0:
+                mep_attributes['date_death'] = mep_date_death_tag.get('datetime')
             else:
-                mep_attributes['deathdate'] = mep_deathdate_tag.get_text().strip()  # @TODO parse as datetime
+                mep_attributes['date_death'] = mep_date_death_tag.get_text().strip()  # @TODO parse as datetime
 
     list_mep_attributes.append(mep_attributes)
 
@@ -143,12 +144,12 @@ for doc in stored_mdb:
                     # Start/end date
                     try:
                         ## start with format text sep
-                        role_item['start_date'] = None
-                        role_item['end_date'] = None
+                        role_item['date_start'] = None
+                        role_item['date_end'] = None
                         if strong_text is not None and len(strong_text>0):
                             dates = re.findall(r'(?:[0-9]+-[0-9]+-[0-9]+)|(?:\.\.\.)', strong_text)
-                            role_item['start_date'] = dates[0]
-                            role_item['end_date'] = dates[1]
+                            role_item['date_start'] = dates[0]
+                            role_item['date_end'] = dates[1]
                         else:
                             raise Exception
                     except:
@@ -156,15 +157,16 @@ for doc in stored_mdb:
                         if dash_sep_texts is not None and any([len(t) > 0 for t in dash_sep_texts]):
                             dates = re.findall(r'(?:[0-9]+-[0-9]+-[0-9]+)|(?:\.\.\.)', dash_sep_texts[0])
                             try:
-                                if role_item['start_date'] is None:
-                                    role_item['start_date'] = dates[0]
+                                if role_item['date_start'] is None:
+                                    role_item['date_start'] = dates[0]
                             except:
                                 pass
                             try:
-                                if role_item['end_date'] is None:
-                                    role_item['end_date'] = dates[1]
+                                if role_item['date_end'] is None:
+                                    role_item['date_end'] = dates[1]
                             except:
                                 pass
+
                     # entity
                     try:
                         entity_text = None
@@ -222,8 +224,8 @@ for doc in stored_mdb:
 
 log.info ("Creating pandas dataframes...")
 # create empty pandas df
-df_attributes = pd.DataFrame(columns=['mep_id', 'timestamp', 'name', 'ms', 'birthdate', 'birthplace', 'deathdate'])
-df_roles = pd.DataFrame(columns=['mep_id', 'url', 'timestamp', 'ep_num', 'start_date', 'end_date', 'role', 'entity', 'entity_type'])
+df_attributes = pd.DataFrame(columns=['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death'])
+df_roles = pd.DataFrame(columns=['mep_id', 'url', 'timestamp', 'ep_num', 'date_start', 'date_end', 'role', 'entity', 'entity_type'])
 
 
 log.info ("Appending parsed information to dataframes...")
@@ -231,7 +233,7 @@ df_attributes = df_attributes.from_records(list_mep_attributes, exclude=['url', 
 
 # for attributes, sort by timestamp and remove duplicates
 log.info("removing duplicate MEP attributes and keeping only the most recently downloaded")
-df_attributes.sort_values('timestamp', inplace=True)
+df_attributes.sort_values('timestamp', ascending = False, inplace=True)
 df_attributes.drop_duplicates(subset=['mep_id'], keep='first', inplace=True)
 
 df_roles = df_roles.from_records(list_mep_roles)
@@ -239,8 +241,14 @@ df_roles = df_roles.from_records(list_mep_roles)
 # column types
 log.info ("Converting dataframe column types")
 ## convert date columns
-df_attributes[["birthdate", "deathdate"]] = df_attributes[["birthdate", "deathdate"]].apply(pd.to_datetime, errors='ignore')
-df_roles[["start_date", "end_date"]] = df_roles[["start_date", "end_date"]].apply(pd.to_datetime, errors='ignore')
+df_attributes[["date_birth", "date_death"]] = df_attributes[["date_birth", "date_death"]].apply(pd.to_datetime, dayfirst = True, errors='coerce')
+df_roles[["date_start", "date_end"]] = df_roles[["date_start", "date_end"]].apply(pd.to_datetime, dayfirst = True, errors='coerce')
+
+# correct data where the start date is large than the end date
+start_end_condition = (df_roles['date_end'].notnull()) & (df_roles.date_start > df_roles.date_end)
+date_start_temp = df_roles.loc[start_end_condition, "date_start"]
+df_roles.loc[start_end_condition, "date_start"] = df_roles.loc[start_end_condition, "date_end"]
+df_roles.loc[start_end_condition, "date_end"] = date_start_temp
 
 ## @DEBUG: to csv
 log.debug("Writing dataframes to csv for debugging")
