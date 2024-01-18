@@ -6,9 +6,8 @@ import os
 import sys
 import sqlite3
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath(BASE_DIR))
-import utilities
+from src import utilities
+from utilities import BASE_DIR
 
 config = utilities.get_config()
 
@@ -40,6 +39,7 @@ for mep_id in mep_ids:
 
 print(str(new_ids) + " new IDs")
 print(str(ex_ids) + " existing IDs")
+print(str(new_ids) + " new IDs written to mepdb")
 
 
 

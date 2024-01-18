@@ -11,9 +11,9 @@ import re
 import os
 import sys
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath(BASE_DIR))
-import utilities
+from src import utilities
+from utilities import BASE_DIR
+
 
 os.environ["TZ"] = "UTC"
 

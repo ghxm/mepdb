@@ -8,10 +8,11 @@ import os
 import sys
 import re
 import argparse
+from tqdm import tqdm
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath(BASE_DIR))
-import utilities
+from src import utilities
+from utilities import BASE_DIR
+
 
 os.environ["TZ"] = "UTC"
 
@@ -24,7 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--parallel", action="store_true", default=False)
 parser.add_argument("-v", "--verbose", action="count", default=0, help="prints out iterations in parallel processing")
 parser.add_argument("-n", "--njobs", default="auto")
-parser.add_argument("-r", "--replace", action="store_true", default=False)  # Download MEP pages and save to MongoDB
+parser.add_argument("-r", "--replace", action="store_true", default=False)
 parser.add_argument("-w", "--wait", type=int, help="wait in seconds between requests", default=1)
 args = parser.parse_args()
 
@@ -35,9 +36,11 @@ if args.parallel:
         args.njobs = int(args.njobs)
     except:
         if args.njobs == "auto":
-            args.njobs = int(joblib.cpu_count()) * 5 - 5
+            args.njobs = int(joblib.cpu_count())
         else:
             raise (Exception("No valid value for --njobs supplied"))
+else:
+    args.njobs = 1
 
 config = utilities.get_config()
 
@@ -53,6 +56,9 @@ sql_mep_ids_query = 'SELECT mep_id FROM meps'
 if not args.replace:
     sql_mep_ids_query = sql_mep_ids_query + ' WHERE url_name is null'
 db_mep_ids = list([i[0] for i in cur.execute(sql_mep_ids_query).fetchall()])
+
+cur.close()
+conn.close()
 
 log.info(str(len(db_mep_ids)) + " IDs selected")
 
@@ -91,7 +97,7 @@ def pipeline(id):
         # request
         log.info('ID ' + str(id) + ': requesting ' + str(url))
         timestamp = datetime.datetime.utcnow()
-        request = http.request('GET', url, redirect=5, retries=5, headers=headers)
+        request = http.request('GET', url, redirect=15, retries=5, headers=headers)
 
         log.info('ID ' + str(id) + ': Status ' + str(request.status))
 
@@ -134,17 +140,15 @@ def pipeline(id):
             log.warning("Wait for 30 minutes (trials > 29)")
             time.sleep(60*30)
 
+    conn = utilities.connect_sqlite()
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
         log.info('ID ' + str(id) + ': adding to SQLITE DB...')
         cur.execute('UPDATE meps SET url_name = ? WHERE mep_id = ?;', (url_name, id))
+        conn.commit()
     except Exception as e:
         log.error('ID ' + str(id) + ': could not add to database: ' + str(e))
 
-if not args.parallel:
-    for id in db_mep_ids:
-        pipeline(id)
-else:
-    # run parallelized version
-    joblib.Parallel(require="sharedmem", n_jobs=args.njobs, verbose=args.verbose)(
-        joblib.delayed(pipeline)(id) for id in db_mep_ids)
+    conn.close()
+
+joblib.Parallel(require="sharedmem", n_jobs=args.njobs if args.parallel else 1, verbose=args.verbose)(joblib.delayed(pipeline)(id) for id in tqdm(db_mep_ids))

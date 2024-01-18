@@ -6,10 +6,10 @@ import sys
 import re
 import pandas as pd
 import argparse
+from tqdm import tqdm
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath(BASE_DIR))
 from src import utilities
+from utilities import BASE_DIR
 
 config = utilities.get_config()
 
@@ -34,10 +34,10 @@ cur = conn.cursor()
 # get all sources from SQLite (if there are multiple for the same URL, only the most recent one is kept)
 stored_mep_html = list(cur.execute("""
 SELECT s1.mep_id, s1.url, s1.timestamp, s1.html
-FROM sources s1
+FROM mep_data s1
 JOIN (
     SELECT url, MAX(timestamp) as max_timestamp
-    FROM sources
+    FROM mep_data
     GROUP BY url
 ) s2
 ON s1.url = s2.url AND s1.timestamp = s2.max_timestamp;
@@ -57,11 +57,11 @@ list_mep_attributes = []
 list_mep_roles = []
 
 # loop over all documents retrieved from mongodb
-for doc in stored_mep_html:
+for doc in tqdm(stored_mep_html):
 
     mep_attributes = {}
 
-    log.info("Parsing document " + str(doc['_id']))
+    log.info("Parsing document " + str(doc[1]))
 
     mep_attributes['mep_id'] = doc[0]
     mep_attributes['timestamp'] = doc[2]
@@ -88,7 +88,7 @@ for doc in stored_mep_html:
             mep_attributes['name'] = None
 
         try:
-            h3_ms_tags = mep_header.find_all(class_=re.compile(r'h3'), text=re.compile(eu_regex, flags=re.IGNORECASE))
+            h3_ms_tags = mep_header.find_all(class_=re.compile(r'h3'), string=re.compile(eu_regex, flags=re.IGNORECASE))
             if len(h3_ms_tags) == 0:
                 raise Exception
             else:
@@ -225,20 +225,30 @@ for doc in stored_mep_html:
     # TODO: parse other sections
 
 log.info ("Creating pandas dataframes...")
-# create empty pandas df
-df_attributes = pd.DataFrame(columns=['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death'])
-df_roles = pd.DataFrame(columns=['mep_id', 'url', 'timestamp', 'ep_num', 'date_start', 'date_end', 'role', 'entity', 'entity_type'])
 
+df_attributes = pd.DataFrame.from_records(list_mep_attributes)
 
-log.info ("Appending parsed information to dataframes...")
-df_attributes = df_attributes.from_records(list_mep_attributes, exclude=['url', 'ep_num'])
+# Add missing columns
+for col in ['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death']:
+    if col not in df_attributes.columns:
+        df_attributes[col] = pd.np.nan
 
-# for attributes, sort by timestamp and remove duplicates
+# sort by timestamp and remove duplicates
 log.info("removing duplicate MEP attributes and keeping only the most recently downloaded")
 df_attributes.sort_values('timestamp', ascending = False, inplace=True)
 df_attributes.drop_duplicates(subset=['mep_id'], keep='first', inplace=True)
 
-df_roles = df_roles.from_records(list_mep_roles)
+df_roles = pd.DataFrame.from_records(list_mep_roles)
+
+# sort by timestamp and remove duplicates
+log.info("removing duplicate MEP attributes and keeping only the most recently downloaded")
+df_roles.sort_values('timestamp', ascending = False, inplace=True)
+df_roles.drop_duplicates(subset=['mep_id', 'role', 'entity', 'date_start', 'date_end'], keep='first', inplace=True)
+
+for col in ['mep_id', 'url', 'timestamp', 'ep_num', 'date_start', 'date_end', 'role', 'entity', 'entity_type']:
+    if col not in df_roles.columns:
+        df_roles[col] = pd.np.nan
+
 
 # column types
 log.info ("Converting dataframe column types")

@@ -6,8 +6,9 @@ import os
 import sys
 import logging
 import datetime
+import warnings
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, os.path.abspath(BASE_DIR))
 
 def log_to_file(filename, level=logging.INFO):
@@ -23,18 +24,24 @@ def log_to_file(filename, level=logging.INFO):
     return logger
 
 
-def get_config():
+def get_config(path = None):
 
     config = configparser.ConfigParser ()
 
-    config_path = os.path.abspath (os.path.dirname (__file__))
+    if path is None:
+        config_path = os.path.abspath (os.path.dirname (__file__)) + '/../'
+    else:
+        config_path = path
 
     #print (euplexdb_tools_path)
 
-    if "config.ini" in os.listdir(config_path):
-        path = config_path + "/../config.ini"
+    if not config_path.endswith (".ini"):
+        if "config.ini" in os.listdir(config_path):
+            path = config_path + "/config.ini"
+        else:
+            raise Exception("config.ini not found!")
     else:
-        raise Exception("config.ini not found!")
+        path = config_path
 
     config.read (path, encoding = 'utf-8')
 
@@ -48,24 +55,20 @@ def connect_mongodb(connect = True):
 
      return mdb_db
 
-def connect_sqlite(check_same_thread=False):
+def connect_sqlite(db_path = None, check_same_thread = False, not_exists_create = False):
 
     config = get_config()
 
-    db_path = os.path.join(BASE_DIR, config.get ('SQL', 'sqlite_db'))
-
-    print(db_path)
+    if db_path is None:
+        db_path = os.path.join(BASE_DIR, config.get ('SQL', 'sqlite_db'))
 
     if os.path.exists(db_path):
         pass
     else:
-        raise Exception("DB file does not exist!")
-
-
-    #if config.getboolean('SQL', 'authentication'):
-    #    psql_conn = sqlite3.connect (host=config.get ('PSQL', 'host'), database=config.get ('PSQL', 'db'),
-    #                              user=config.get ('PSQL', 'user'), password=config.get ('PSQL', 'password'), port=config.get('PSQL', 'port'))
-    #else:
+        if not_exists_create:
+            warnings.warn("DB file ("+ db_path +") does not exist! Creating new DB file.")
+        else:
+            raise Exception("DB file ("+ db_path +") does not exist!")
 
     conn = sqlite3.connect (database=db_path, check_same_thread=check_same_thread)
 
@@ -113,10 +116,14 @@ def add_mep_html_sqlite(html, mep_id, url=None, timestamp=None, insert_only_upda
 
         if (timediff is not None and timestamp is not None and last_copy_timestamp is not None) and (timestamp - last_copy_timestamp) > timediff:
             insert = True
-        elif insert_only_update:
+
+        if insert_only_update:
             # Insert a new record only if the HTML content has changed
             if html != record[3]:
                 insert = True
+            else:
+                insert = False
+
 
         # if there is reason to add the new html
         if insert:
