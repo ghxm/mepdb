@@ -1,5 +1,4 @@
-# download and add MEP pages to MongoDB from various sources (SQL, file, ...)
-# @TODO: Test
+# Collect MEP url names from the MEP register
 
 import datetime
 import urllib3
@@ -47,7 +46,7 @@ conn = utilities.connect_sqlite()
 cur = conn.cursor()
 
 headers = {
-    'user-agent': 'EUPLEX-MEPDB webspider (spiders@euplex.org)',  # to identify the webspider vis a vis the server
+    'user-agent': 'MEPDB webspider',  # to identify the webspider vis a vis the server
     'accept-language': 'en-gb'}
 
 sql_mep_ids_query = 'SELECT mep_id FROM meps'

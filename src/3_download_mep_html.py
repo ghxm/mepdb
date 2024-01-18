@@ -1,5 +1,4 @@
-# download and add MEP pages to MongoDB from various sources (SQL, file, ...)
-# @TODO: Test
+# Download MEP pages and save to Sqlite
 
 import datetime
 import urllib3
@@ -25,12 +24,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--parallel", action="store_true", default=False)
 parser.add_argument("-v", "--verbose", action="count", default=0, help="prints out iterations in parallel processing")
 parser.add_argument("-n", "--njobs", default="auto")
-parser.add_argument("-d", "--download", action="store_true", default=False)  # Download MEP pages and save to MongoDB
-parser.add_argument("-r", "--replace", action="store_true", default=False)  # Download MEP pages and save to MongoDB
-parser.add_argument("--days", type=int, default=30)  # Download MEP pages and save to MongoDB
+parser.add_argument('-e','--ep', nargs='+', help='EP numbers to download', default=range(1,10), required=False)
+parser.add_argument("-r", "--replace", action="store_true", default=False)  # Replace existing MEP pages in SQLite instead of adding new source entries
+parser.add_argument("--days", type=int, default=30, help="only update if last update is older than x days")
 parser.add_argument("-u", "--update", action="store_true", default=False,
-                    help="look for updates to existing pages if latest copy is either too old (--days) or html has changed (@TODO)")
-parser.add_argument("-l", "--limit", type=int, default=0)
+                    help="look for updates to existing pages if latest copy is either too old (--days) or html has changed")
+parser.add_argument("-l", "--limit", type=int, default=None) # @TODO
 parser.add_argument("-w", "--wait", type=int, help="wait in seconds between requests", default=1)
 args = parser.parse_args()
 
@@ -56,25 +55,28 @@ config = utilities.get_config()
 conn = utilities.connect_sqlite()
 cur = conn.cursor()
 
-#  db connection
-mdb_db = utilities.connect_mongodb()
-mdb_col = mdb_db[config.get('MONGODB', 'col_mep_register_copies')]
-
 headers = {
     'user-agent': 'EUPLEX-MEPDB webspider (spiders@euplex.org)',  # to identify the webspider vis a vis the server
     'accept-language': 'en-gb'}
 
 db_meps = list([i for i in cur.execute('SELECT mep_id, url_name FROM meps').fetchall()])
 
-ep_nums = range(1,10)
-db_mep_eps = [mep + (ep_num,) for mep in db_meps for ep_num in ep_nums]
+ep_nums = args.ep
+db_mep_eps = [mep + (ep_num,) for mep in db_meps for ep_num in ep_nums][0:args.limit]
+
 
 if not args.update:
-    stored_mdb = list(mdb_col.find({}, {'mep_id': 1, 'url': 1}))
-    stored_mdb_compare = [(m['mep_id'], re.findall(r'(?<=[0-9]/).*?(?=/)',m['url'])[0], int(re.findall(r'[0-9]+/*$', m['url'])[0])) for m in stored_mdb]
+    # get all already stored MEP html from SQLite
+    stored_mep_html = list([i for i in cur.execute('SELECT mep_id, url, html FROM mep_html').fetchall()])
+    stored_mdb_compare = [(m[0], re.findall(r'(?<=[0-9]/).*?(?=/)',m[1])[0], int(re.findall(r'[0-9]+/*$', m[1])[0])) for m in stored_mep_html]
+    # remove already stored MEP html from list
     mep_ids_eps = set(db_mep_eps) - set(stored_mdb_compare)
 else:
+    # get all (updates old html) MEP html pages from SQLite
     mep_ids_eps = db_mep_eps
+
+if args.limit is not None:
+    mep_ids_eps = mep_ids_eps[0:args.limit]
 
 log.info(str(len(mep_ids_eps)) + " MEP - EP combinations selected")
 
@@ -104,7 +106,7 @@ def pipeline(id, url_name, ep_num):
         url = None
 
         # save ID to mep.db
-        url = config.get('GENERAL', 'mep_scrape_url').format(id=str(id), url_name = url_name, ep_num = ep_num)
+        url = config.get('GENERAL', 'mep_register_base_url').format(id=str(id))
         # request
         log.info('ID ' + str(id) + " " + str(ep_num) + ': requesting ' + str(url))
         timestamp = datetime.datetime.utcnow()
@@ -113,7 +115,17 @@ def pipeline(id, url_name, ep_num):
         log.info('ID ' + str(id) + ': Status ' + str(request.status))
 
         landing_url = request.geturl()
+
+        if url_name is None:
+            # get url name
+            url_name = re.findall(r'(?<=[0-9]/).*?(?=/)', landing_url)[0]
+
+            # add to SQLite
+            cur.execute('UPDATE meps SET url_name = ? WHERE mep_id = ?;', (url_name, id))
+            conn.commit()
+
         landing_url_num_list = re.findall(r'[0-9]+/*$', landing_url)
+
         if len(landing_url_num_list) != 0:
             landing_url_num = int(landing_url_num_list[0])
         else:
@@ -147,14 +159,12 @@ def pipeline(id, url_name, ep_num):
 
         log.info('ID ' + str(id) + " " + str(ep_num) +  ': successful request (Status code 200)')
 
-        # save id to mep.db
 
         # save HTML to MongoDB
-
         if is_valid_html:
             log.info('ID ' + str(id) + " " + str(ep_num) + ': adding to MongoDB...')
-            utilities.add_mep_html_mongodb(html=request.data.decode(), mep_id=id, url=url,
-                                               timediff=args.days, replace=args.replace)
+            utilities.add_mep_html_sqlite(html=request.data.decode(), mep_id=id, url=url,
+                                           timediff=args.days, replace=args.replace)
             break
 
         if trials > 30:

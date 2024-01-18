@@ -1,20 +1,24 @@
 # @TODO: command-line arguments
 import datetime
-import time
-import joblib
 from bs4 import BeautifulSoup
 import os
 import sys
 import re
 import pandas as pd
 import argparse
-import dateutil.parser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(BASE_DIR))
-import utilities
+from src import utilities
 
 config = utilities.get_config()
+
+# command line args
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--csv", action="store_true", default=False, help="write output to csv as well")
+
+args = parser.parse_args()
+
 
 os.environ["TZ"] = "UTC"
 
@@ -25,23 +29,19 @@ log = utilities.log_to_file(os.path.join(BASE_DIR, 'logs/parse_mep_pages_%s.txt'
 
 # SQL connection
 conn = utilities.connect_sqlite()
+cur = conn.cursor()
 
-#  db connection
-mdb_db = utilities.connect_mongodb()
-mdb_col = mdb_db[config.get('MONGODB', 'col_mep_register_copies')]
-
-# for all unique urls in MongoDB get the latest, resp.
-stored_mdb = mdb_col.aggregate([
-  { "$sort": { "timestamp": -1 }},
-    #{"$limit": 100}, # @DEBUG
-  { "$group": {
-    "_id": "$url",
-    "doc": { "$first": "$$ROOT" }
-  }},
-  { "$replaceRoot": {
-    "newRoot": "$doc"
-  }}
-], allowDiskUse = True)
+# get all sources from SQLite (if there are multiple for the same URL, only the most recent one is kept)
+stored_mep_html = list(cur.execute("""
+SELECT s1.mep_id, s1.url, s1.timestamp, s1.html
+FROM sources s1
+JOIN (
+    SELECT url, MAX(timestamp) as max_timestamp
+    FROM sources
+    GROUP BY url
+) s2
+ON s1.url = s2.url AND s1.timestamp = s2.max_timestamp;
+""").fetchall())
 
 # @DEBUG
 # stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/1/GEORG_JARZEMBOWSKI/history/3"})
@@ -57,19 +57,19 @@ list_mep_attributes = []
 list_mep_roles = []
 
 # loop over all documents retrieved from mongodb
-for doc in stored_mdb:
+for doc in stored_mep_html:
 
     mep_attributes = {}
 
     log.info("Parsing document " + str(doc['_id']))
 
-    mep_attributes['mep_id'] = doc['mep_id']
-    mep_attributes['timestamp'] = doc['timestamp']
-    mep_attributes['url'] = doc['url']
+    mep_attributes['mep_id'] = doc[0]
+    mep_attributes['timestamp'] = doc[2]
+    mep_attributes['url'] = doc[1]
     mep_attributes['ep_num'] = int(re.findall(r'[0-9]+/*$', mep_attributes['url'])[0])
-    html = doc['html']
+    html = doc[-1]
 
-    # @TODO: parse
+    # parse
     bs_obj = BeautifulSoup(html, "html.parser")
     mep_header = bs_obj.find(id="presentationmep")
     mep_term = bs_obj.find(id="detailedcardmep").find_next("section")
@@ -121,7 +121,7 @@ for doc in stored_mdb:
 
     list_mep_attributes.append(mep_attributes)
 
-    # @TODO: term activity parsing
+    # role parsing
     if mep_term is None:
         log.error(str(mep_attributes['id']) + " " + mep_attributes['url'] + " " + "MEP term activity html not found!")
     else:
@@ -222,6 +222,8 @@ for doc in stored_mdb:
 
                     list_mep_roles.append(role_item)
 
+    # TODO: parse other sections
+
 log.info ("Creating pandas dataframes...")
 # create empty pandas df
 df_attributes = pd.DataFrame(columns=['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death'])
@@ -250,10 +252,10 @@ date_start_temp = df_roles.loc[start_end_condition, "date_start"]
 df_roles.loc[start_end_condition, "date_start"] = df_roles.loc[start_end_condition, "date_end"]
 df_roles.loc[start_end_condition, "date_end"] = date_start_temp
 
-## @DEBUG: to csv
-log.debug("Writing dataframes to csv for debugging")
-df_attributes.to_csv(os.path.join(BASE_DIR, "dataset/attributes.csv"))
-df_roles.to_csv(os.path.join(BASE_DIR, "dataset/roles.csv"))
+# log.debug("Writing dataframes to csv for debugging")
+if args.csv:
+    df_attributes.to_csv(os.path.join(BASE_DIR, "data/attributes.csv"))
+    df_roles.to_csv(os.path.join(BASE_DIR, "data/roles.csv"))
 
 # df to sql, replace accordingly
 try:

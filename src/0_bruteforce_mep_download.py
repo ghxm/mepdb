@@ -1,5 +1,4 @@
-# test and download MEP sites on the EU register by bruteforcing MEP IDs
-# @TODO: Log Stats
+# Bruteforce MEP IDs and download MEP pages
 
 import urllib3
 import sqlite3
@@ -58,7 +57,7 @@ mdb_db = utilities.connect_mongodb()
 conn = utilities.connect_sqlite()
 
 headers = {
-    'user-agent': 'EUPLEX-MEPDB webspider (spiders@euplex.org)',  # to identify the webspider vis a vis the server
+    'user-agent': 'MEPDB webspider',  # to identify the webspider vis a vis the server
     'accept-language': 'en-gb'}
 
 additional_ids = []
@@ -142,20 +141,28 @@ def pipeline(id):
         log.info('ID ' + str(id) + ': successful request (Status code 200)')
         log.info('ID ' + str(id) + ': is MEP ID? ' + str(is_mep_id))
 
-        # save id to mep.db
-        try:
-            cur = conn.cursor()
-            log.info('ID ' + str(id) + ': adding to SQLITE DB...')
-            cur.execute('INSERT INTO meps (mep_id, is_mep_id) VALUES (?, ?);', (id, is_mep_id))
-            new = True
-        except sqlite3.IntegrityError:
-            log.info('ID ' + str(id) + ': already in SQLITE DB')
-            new = False
+        if is_mep_id:
 
-        # save HTML to MongoDB
-        if bool(is_mep_id) and new and args.download:
-            utilities.add_mep_html_mongodb(html=request.data.decode(), mep_id=id, url=url,
-                                           timediff=datetime.timedelta(days=30), replace = args.replace, mdb_db=mdb_db)
+            try:
+                # try to get the mep url name from the current html
+                mep_url_name = re.findall(r'(?<=/meps/).*?(?=/)', request.geturl(), flags=re.MULTILINE)
+            except:
+                mep_url_name = None
+
+            # save id to mep.db
+            try:
+                cur = conn.cursor()
+                log.info('ID ' + str(id) + ': adding to SQLITE DB...')
+                cur.execute('INSERT INTO meps (mep_id, url_name) VALUES (?, ?);', (id, mep_url_name))
+                new = True
+            except sqlite3.IntegrityError:
+                log.info('ID ' + str(id) + ': already in SQLITE DB')
+                new = False
+
+            # save HTML to MongoDB
+            if bool(is_mep_id) and (new and args.onlynew) and args.download:
+                utilities.add_mep_html_sqlite(html=request.data.decode(), mep_id=id, url=url,
+                                               timediff=datetime.timedelta(days=30), replace = args.replace, mdb_db=mdb_db)
 
 
         if trials > 30:

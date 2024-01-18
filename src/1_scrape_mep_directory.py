@@ -4,6 +4,7 @@ import urllib3
 import re
 import os
 import sys
+import sqlite3
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(BASE_DIR))
@@ -20,9 +21,26 @@ xml = request.data.decode()
 # get all ids
 mep_ids = [(id,) for id in re.findall(r'(?<=<id>).*?(?=</id>)', xml, flags=re.MULTILINE)]
 
+print(str(len(mep_ids)) + " MEP IDs found")
+
 # insert all into DB
+
 conn = utilities.connect_sqlite()
 cur = conn.cursor()
-cur.executemany('INSERT INTO meps (mep_id) VALUES (?);', (mep_ids))
+
+new_ids = 0
+ex_ids = 0
+
+for mep_id in mep_ids:
+    try:
+        cur.execute('INSERT INTO meps (mep_id) VALUES (?);', (mep_id))
+        new_ids = new_ids + 1
+    except sqlite3.IntegrityError:
+        ex_ids = ex_ids + 1
+
+print(str(new_ids) + " new IDs")
+print(str(ex_ids) + " existing IDs")
+
+
 
 # END
