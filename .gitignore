@@ -1,3 +1,5 @@
+config.ini
+
 # Created by .ignore support plugin (hsz.mobi)
 ### R template
 # History files
@@ -191,3 +193,4 @@ cython_debug/
 .idea/misc.xml
 .idea/modules.xml
 .idea/vcs.xml
+

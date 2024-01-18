@@ -1,0 +1,13 @@
+[GENERAL]
+
+# indicate the id placeholder by using {id}
+mep_register_base_url = https://www.europarl.europa.eu/meps/en/{id}
+mep_register_directory_url = https://www.europarl.europa.eu/meps/en/directory/all/all
+mep_register_directory_xml_url = https://www.europarl.europa.eu/meps/en/directory/xml
+mep_scrape_url= https://www.europarl.europa.eu/meps/en/{id}/{url_name}/history/{ep_num}
+
+[SQL]
+
+sqlite_db = data/mep.db
+
+
