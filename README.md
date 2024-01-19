@@ -8,7 +8,7 @@ The dataset is structured as follows:
 - `data/attributes.csv` / `attributes` table: Table containing MEP attributes
 - `data/roles.csv` / `roles` table: Table containing MEP roles (e.g. committee memberships)
 
-# Usage
+## Usage
 
 Eventually, the dataset will be updated regularly made available for download. For now you can use a legacy verstion stoed in the `data` folder or you can build it yourself.
 
