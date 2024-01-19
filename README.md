@@ -1,6 +1,6 @@
 # mepdb
 
-This project aims to build a dataset of Members of the European Parliament (MEPs). It scrapes data from the official European Parliament MEP register and stores it in a SQLite database as well as in csv format (optional) for easy access and analysis.
+This project aims to build a dataset of Members of the European Parliament (MEPs) (similar to the seemingly https://journals.sagepub.com/doi/10.1177/1465116508099764). It scrapes data from the official European Parliament MEP register and stores it in a SQLite database as well as in csv format (optional) for easy access and analysis.
 
 The dataset is structured as follows:
 
