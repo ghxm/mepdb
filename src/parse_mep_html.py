@@ -231,7 +231,7 @@ df_attributes = pd.DataFrame.from_records(list_mep_attributes)
 # Add missing columns
 for col in ['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death']:
     if col not in df_attributes.columns:
-        df_attributes[col] = pd.np.nan
+        df_attributes[col] = pd.NA
 
 # sort by timestamp and remove duplicates
 log.info("removing duplicate MEP attributes and keeping only the most recently downloaded")
@@ -247,7 +247,7 @@ df_roles.drop_duplicates(subset=['mep_id', 'role', 'entity', 'date_start', 'date
 
 for col in ['mep_id', 'url', 'timestamp', 'ep_num', 'date_start', 'date_end', 'role', 'entity', 'entity_type']:
     if col not in df_roles.columns:
-        df_roles[col] = pd.np.nan
+        df_roles[col] = pd.NA
 
 
 # column types
