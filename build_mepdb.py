@@ -48,7 +48,7 @@ except sqlite3.OperationalError:
 run_script("scrape_mep_directory.py")
 
 # Collect MEP url names from the MEP register to make it easier to scrape MEP pages
-run_script("collect_mep_url_names.py", ["-p"])
+run_script("collect_mep_url_names.py")
 
 # Download MEP pages and save to SQLite
 run_script("download_mep_html.py", ["-p"])

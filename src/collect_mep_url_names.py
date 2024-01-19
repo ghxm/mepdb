@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--parallel", action="store_true", default=False)
 parser.add_argument("-v", "--verbose", action="count", default=0, help="prints out iterations in parallel processing")
 parser.add_argument("-n", "--njobs", default="auto")
-parser.add_argument("-r", "--replace", action="store_true", default=False)
+parser.add_argument("-r", "--update-all", action="store_true", default=False, help = "Update all names, even if they already exist in the database")
 parser.add_argument("-w", "--wait", type=int, help="wait in seconds between requests", default=1)
 args = parser.parse_args()
 
@@ -53,7 +53,7 @@ headers = {
     'accept-language': 'en-gb'}
 
 sql_mep_ids_query = 'SELECT mep_id FROM meps'
-if not args.replace:
+if not args.update_all:
     sql_mep_ids_query = sql_mep_ids_query + ' WHERE url_name is null'
 db_mep_ids = list([i[0] for i in cur.execute(sql_mep_ids_query).fetchall()])
 
@@ -80,7 +80,7 @@ def pipeline(id):
 
     while try_again:
 
-        time.sleep(args.wait)
+        time.sleep(args.wait + trials)
 
         is_valid_html = None
 
@@ -101,7 +101,12 @@ def pipeline(id):
 
         log.info('ID ' + str(id) + ': Status ' + str(request.status))
 
-        if 399 < int(request.status) < 500:
+        if int(request.status) == 429:
+            log.warning('ID ' + str(id) + ': too many requests, waiting for 2 minutes...')
+            time.sleep(2 * 60)
+            try_again = True
+            is_valid_html = False
+        elif 399 < int(request.status) < 500:
             is_valid_html = False
         elif int(request.status) == 200:
             html = request.data.decode()

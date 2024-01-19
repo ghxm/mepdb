@@ -21,16 +21,16 @@ log = utilities.log_to_file(os.path.join(BASE_DIR, 'logs/mep_download_%s.txt') %
 
 # command line args
 parser = argparse.ArgumentParser()
-parser.add_argument("-p", "--parallel", action="store_true", default=False)
-parser.add_argument("-v", "--verbose", action="count", default=0, help="prints out iterations in parallel processing")
-parser.add_argument("-n", "--njobs", default="auto")
+parser.add_argument("-p", "--parallel", action="store_true", default=False, help="Parallel processing")
+parser.add_argument("-v", "--verbose", action="count", default=0, help="Print out iterations in parallel processing")
+parser.add_argument("-n", "--njobs", default="auto", help="Number of parallel jobs")
 parser.add_argument('-e','--ep', nargs='+', help='EP numbers to download', default=range(1,10), required=False)
-parser.add_argument("-r", "--replace", action="store_true", default=False)  # Replace existing MEP pages in SQLite instead of adding new source entries
-parser.add_argument("--days", type=int, default=30, help="only update if last update is older than x days")
-parser.add_argument("-u", "--update", action="store_true", default=False,
-                    help="Re-download all and update existing MEP pages in SQLite. If false, only try to download new MEP pages and those that have been downloaded more than --days ago (if --days is set).")
-parser.add_argument("-l", "--limit", type=int, default=None)
-parser.add_argument("-w", "--wait", type=int, help="wait in seconds between requests", default=1)
+parser.add_argument("-r", "--replace", action="store_true", default=False, help = "Replace existing MEP pages in SQLite instead of adding new source entries")
+parser.add_argument("--days", type=int, default=30, help="Only re-download and update if last update is older than x days")
+parser.add_argument("-u", "--update-all", action="store_true", default=False,
+                    help="Re-download all and update all MEP pages in SQLite. If false, only try to download new MEP pages and those that have been downloaded more than --days ago (if --days is set).")
+parser.add_argument("-l", "--limit", type=int, default=None, help="Limit the number of MEP pages to download")
+parser.add_argument("-w", "--wait", type=int, help="Wait in seconds between requests", default=1)
 args = parser.parse_args()
 
 log.info(args)
@@ -45,7 +45,7 @@ if args.parallel:
             raise (Exception("No valid value for --njobs supplied"))
 else:
     args.njobs = 1
-if not args.update:
+if not args.update_all:
     args.days = None
 
 if args.days is not None:
@@ -70,12 +70,12 @@ ep_nums = args.ep
 db_mep_eps = [mep + (ep_num,) for mep in db_meps for ep_num in ep_nums][0:args.limit]
 
 
-if not args.update: # keep only not yet downloaded URLs to download
+if not args.update_all: # keep only not yet downloaded URLs to download
 
     # get all already stored MEP html from SQLite
     stored_mep_html = list([i for i in cur.execute('SELECT mep_id, url, html, timestamp FROM mep_data').fetchall()])
 
-    if not args.days:
+    if args.days is not None:
         # keep only urls that have been downloaded in the last x days
         stored_mep_html = [m for m in stored_mep_html if m[3] > datetime.datetime.utcnow() - args.days]
 
@@ -119,7 +119,7 @@ def pipeline(id, url_name, ep_num):
     trials = 0
     while try_again:
 
-        time.sleep(trials)
+        time.sleep(args.wait + trials)
 
         is_valid_html = False
 
@@ -175,23 +175,26 @@ def pipeline(id, url_name, ep_num):
 
         landing_url = request.geturl()
 
-        landing_url_num_list = re.findall(r'[0-9]+/*$', landing_url)
+        try:
+            landing_url_num_list = re.findall(r'[0-9]+/*$', landing_url)
+        except:
+            landing_url_num_list = []
 
         if len(landing_url_num_list) != 0:
             landing_url_num = int(landing_url_num_list[0])
         else:
             landing_url_num = 0
 
-        if landing_url_num != ep_num or int(request.status) == 303 or int(request.status) == 404:
-            log.info('ID ' + str(id) + " " + str(ep_num) + ': Not a valid EP number for this MEP')
-            is_valid_html = False
-            try_again = False
-            break
-        elif int(request.status) == 429:
+        if int(request.status) == 429:
             log.warning('ID ' + str(id) + " " + str(ep_num) + ': too many requests, waiting for 2 minutes...')
             time.sleep(2 * 60)
             try_again = True
             is_valid_html = False
+        elif landing_url_num != ep_num or int(request.status) == 303 or int(request.status) == 404:
+            log.info('ID ' + str(id) + " " + str(ep_num) + ': Not a valid EP number for this MEP')
+            is_valid_html = False
+            try_again = False
+            break
         elif 399 < int(request.status) < 500:
             is_valid_html = False
             try_again = False
@@ -216,10 +219,10 @@ def pipeline(id, url_name, ep_num):
         log.info('ID ' + str(id) + " " + str(ep_num) +  ': successful request (Status code 200)')
 
 
-        # save HTML to MongoDB
+        # save HTML to database
         if is_valid_html:
             log.info('ID ' + str(id) + " " + str(ep_num) + ': adding to SQLite...')
-            utilities.add_mep_html_sqlite(html=request.data.decode(), mep_id=id, url=url,
+            utilities.add_mep_html_sqlite(html=request.data.decode(), mep_id=id, url=url, timestamp=timestamp,
                                            timediff=args.days, replace=args.replace)
             break
 
