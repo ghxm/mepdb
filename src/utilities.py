@@ -12,6 +12,17 @@ BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, os.path.abspath(BASE_DIR))
 
 def log_to_file(filename, level=logging.INFO):
+    """
+    This function sets up a logger that writes to a file.
+
+    Parameters:
+    filename (str): The name of the file to which the log will be written.
+    level (int, optional): The level of the log. Defaults to logging.INFO.
+
+    Returns:
+    logger: A logger instance.
+    """
+
     handler = logging.FileHandler (filename)
     handler.setLevel (level)
     formatter = logging.Formatter (fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -25,6 +36,15 @@ def log_to_file(filename, level=logging.INFO):
 
 
 def get_config(path = None):
+    """
+    This function reads the configuration file.
+
+    Parameters:
+    path (str, optional): The path to the configuration file. If not provided, the function will look for 'config.ini' in the current directory.
+
+    Returns:
+    config: A ConfigParser instance that holds the configuration data.
+    """
 
     config = configparser.ConfigParser ()
 
@@ -32,8 +52,6 @@ def get_config(path = None):
         config_path = os.path.abspath (os.path.dirname (__file__)) + '/../'
     else:
         config_path = path
-
-    #print (euplexdb_tools_path)
 
     if not config_path.endswith (".ini"):
         if "config.ini" in os.listdir(config_path):
@@ -47,15 +65,19 @@ def get_config(path = None):
 
     return config
 
-def connect_mongodb(connect = True):
-     config = get_config()
-
-     mdb_client = mongo_proxy.MongoProxy(pymongo.MongoClient ("mongodb://" + config.get ('MONGODB', 'host') + ":" + config.get ('MONGODB', 'port') + "/", username = config.get('MONGODB', 'user'), password = config.get('MONGODB', 'password'), connect = connect))
-     mdb_db = mdb_client[config.get ('MONGODB', 'db')]
-
-     return mdb_db
 
 def connect_sqlite(db_path = None, check_same_thread = False, not_exists_create = False):
+    """
+    This function establishes a connection to an SQLite database.
+
+    Parameters:
+    db_path (str, optional): The path to the SQLite database file. If not provided, the function will use the path specified in the configuration file.
+    check_same_thread (bool, optional): If set to False, allows multiple threads to use the same connection. Defaults to False.
+    not_exists_create (bool, optional): If set to True, a new database file will be created if it does not exist. Defaults to False.
+
+    Returns:
+    conn: A SQLite connection instance.
+    """
 
     config = get_config()
 
