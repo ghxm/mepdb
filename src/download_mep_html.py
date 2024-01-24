@@ -11,7 +11,7 @@ import argparse
 from tqdm import tqdm
 
 from src import utilities
-from utilities import BASE_DIR
+from utilities import BASE_DIR, CURRENT_EP
 
 os.environ["TZ"] = "UTC"
 
@@ -84,6 +84,12 @@ if not args.update_all: # keep only not yet downloaded URLs to download
 
     # remove already stored MEP html from download list
     mep_ids_eps = {x for x in set(db_mep_eps) if (x[0], x[2]) not in {(m[0], m[2]) for m in set(stored_mep_compare)}}
+
+    # get all already failed requested MEP sites that are 2 eps older than the current one
+    failed_mep_requests = list([i for i in cur.execute('SELECT mep_id, ep_num FROM mep_requests WHERE status_code IN (404, 303) and ep_num < ? - 1', (CURRENT_EP,)).fetchall()])
+    # remove already failed MEP requests from download list
+    mep_ids_eps = {x for x in mep_ids_eps if (x[0], x[2]) not in {(m[0], m[1]) for m in set(failed_mep_requests)}}
+
 else:
     # get all (updates old html) MEP html pages from SQLite
     mep_ids_eps = db_mep_eps
@@ -169,7 +175,8 @@ def pipeline(id, url_name, ep_num):
         # request
         log.info('ID ' + str(id) + " " + str(ep_num) + ': requesting ' + str(url))
         timestamp = datetime.datetime.utcnow()
-        request = http.request('GET', url, redirect=5, retries=5, headers=headers)
+        request = http.request('GET', url, redirect=False, retries=5, headers=headers)
+        # note: setting redirect to false should make the landing_url check obsolete but we can rely on the status code instead
 
         log.info('ID ' + str(id) + ': Status ' + str(request.status))
 
@@ -192,6 +199,16 @@ def pipeline(id, url_name, ep_num):
             is_valid_html = False
         elif landing_url_num != ep_num or int(request.status) == 303 or int(request.status) == 404:
             log.info('ID ' + str(id) + " " + str(ep_num) + ': Not a valid EP number for this MEP')
+
+            # add to mep_requests table
+            conn = utilities.connect_sqlite()
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT OR REPLACE INTO mep_requests (mep_id, ep_num, timestamp, status_code) VALUES (?, ?, ?, ?);',
+                (id, ep_num, timestamp, int(request.status)))
+            conn.commit()
+            conn.close()
+
             is_valid_html = False
             try_again = False
             break
@@ -224,6 +241,15 @@ def pipeline(id, url_name, ep_num):
             log.info('ID ' + str(id) + " " + str(ep_num) + ': adding to SQLite...')
             utilities.add_mep_html_sqlite(html=request.data.decode(), mep_id=id, url=url, timestamp=timestamp,
                                            timediff=args.days, replace=args.replace)
+
+            # add to mep_requests table
+            conn = utilities.connect_sqlite()
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT OR REPLACE INTO mep_requests (mep_id, ep_num, timestamp, status_code) VALUES (?, ?, ?, ?);',
+                (id, ep_num, timestamp, int(request.status)))
+            conn.commit()
+            conn.close()
             break
 
         if trials > 30:

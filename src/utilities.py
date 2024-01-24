@@ -8,6 +8,8 @@ import logging
 import datetime
 import warnings
 
+CURRENT_EP = 9
+
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, os.path.abspath(BASE_DIR))
 
