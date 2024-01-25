@@ -7,6 +7,7 @@ import re
 import pandas as pd
 import argparse
 from tqdm import tqdm
+import joblib
 
 from src import utilities
 from utilities import BASE_DIR
@@ -15,9 +16,22 @@ config = utilities.get_config()
 
 # command line args
 parser = argparse.ArgumentParser()
+parser.add_argument("-p", "--parallel", action="store_true", default=False, help="Parallel processing")
+parser.add_argument("-v", "--verbose", action="count", default=0, help="Print out iterations in parallel processing")
+parser.add_argument("-n", "--njobs", default="auto", help="Number of parallel jobs")
 parser.add_argument("-c", "--csv", action="store_true", default=False, help="write output to csv as well")
-
 args = parser.parse_args()
+
+
+if args.parallel:
+    try:
+        args.njobs = int(args.njobs)
+    except:
+        if args.njobs == "auto":
+            args.njobs = int(joblib.cpu_count())
+        else:
+            raise (Exception("No valid value for --njobs supplied"))
+
 
 
 os.environ["TZ"] = "UTC"
@@ -43,6 +57,10 @@ JOIN (
 ON s1.url = s2.url AND s1.timestamp = s2.max_timestamp;
 """).fetchall())
 
+# close connection
+cur.close()
+conn.close()
+
 # @DEBUG
 # stored_mdb = mdb_col.find({'url': "https://www.europarl.europa.eu/meps/en/1/GEORG_JARZEMBOWSKI/history/3"})
 
@@ -53,11 +71,9 @@ eu_countries = ["Austria","Belgium", "Bulgaria","Croatia","Cyprus",
                   "Slovakia","Slovenia","Spain","Sweden", "United Kingdom"]
 eu_regex = "|".join([str(country) for country in eu_countries])
 
-list_mep_attributes = []
-list_mep_roles = []
 
 # loop over all documents retrieved from mongodb
-for doc in tqdm(stored_mep_html):
+def pipeline(doc):
 
     mep_attributes = {}
 
@@ -96,31 +112,30 @@ for doc in tqdm(stored_mep_html):
         except:
             mep_attributes['ms'] = None
 
-        mep_date_birth_tag = mep_header.find(id="birthDate")
-        if mep_date_birth_tag is None:
-            mep_date_birth = None
-        else:
+        mep_date_birth_tag = mep_header.find(class_=re.compile(r'(birth.date|date.birth)'))
+        if mep_date_birth_tag is not None:
+
             if mep_date_birth_tag.get('datetime') is not None and len(mep_date_birth_tag.get('datetime')) > 0:
                 mep_attributes['date_birth'] = mep_date_birth_tag.get('datetime')
             else:
-                mep_attributes['date_birth'] = mep_date_birth_tag.get_text().strip() # @TODO parse as datetime
+                mep_attributes['date_birth'] = mep_date_birth_tag.get_text().strip()
 
-            try:
-                mep_attributes['place_birth'] = mep_date_birth_tag.parent.get_text().strip().split(",")[1].strip()
-            except:
-                mep_attributes['place_birth'] = None
+        mep_place_birth_tag = mep_header.find(class_=re.compile(r'(birth.place|place.birth)'))
+        try:
+            mep_attributes['place_birth'] = mep_place_birth_tag.get_text().strip()
+        except:
+            mep_attributes['place_birth'] = None
 
-        mep_date_death_tag = mep_header.find(id="date_death")
-        if mep_date_death_tag is None:
-            mep_attributes['date_death'] = None
-        else:
+        mep_date_death_tag = mep_header.find(class_=re.compile(r'(death.date|date.death)'))
+        if mep_date_death_tag is not None:
             if mep_date_death_tag.get('datetime') is not None and len(mep_date_death_tag.get('datetime')) > 0:
                 mep_attributes['date_death'] = mep_date_death_tag.get('datetime')
             else:
                 mep_attributes['date_death'] = mep_date_death_tag.get_text().strip()  # @TODO parse as datetime
 
-    list_mep_attributes.append(mep_attributes)
+    list_mep_roles = []
 
+    # role parsing
     # role parsing
     if mep_term is None:
         log.error(str(mep_attributes['id']) + " " + mep_attributes['url'] + " " + "MEP term activity html not found!")
@@ -222,14 +237,24 @@ for doc in tqdm(stored_mep_html):
 
                     list_mep_roles.append(role_item)
 
+    return mep_attributes, list_mep_roles
+
     # TODO: parse other sections
+
+results = joblib.Parallel(require='sharedmem', n_jobs=args.njobs, verbose=args.verbose)(joblib.delayed(pipeline)(doc) for doc in tqdm(stored_mep_html))
+
+list_mep_attributes = [res[0] for res in results]
+list_mep_roles = []
+
+for res in results:
+    list_mep_roles.extend(res[1])
 
 log.info ("Creating pandas dataframes...")
 
 df_attributes = pd.DataFrame.from_records(list_mep_attributes)
 
 # Add missing columns
-for col in ['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'birthplace', 'date_death']:
+for col in ['mep_id', 'timestamp', 'name', 'ms', 'date_birth', 'place_birth', 'date_death']:
     if col not in df_attributes.columns:
         df_attributes[col] = pd.NA
 
@@ -250,14 +275,29 @@ for col in ['mep_id', 'url', 'timestamp', 'ep_num', 'date_start', 'date_end', 'r
         df_roles[col] = pd.NA
 
 
-# column types
+
 log.info ("Converting dataframe column types")
-## convert date columns
-df_attributes[["date_birth", "date_death"]] = df_attributes[["date_birth", "date_death"]].apply(pd.to_datetime, dayfirst = True, errors='coerce')
-df_roles[["date_start", "date_end"]] = df_roles[["date_start", "date_end"]].apply(pd.to_datetime, dayfirst = True, errors='coerce')
+# convert date columns
+
+def transform_date_columns(df):
+    # Select columns that start with 'date_'
+    date_columns = [col for col in df.columns if col.startswith('date_')]
+
+    # Apply the transform_date_format function to each element of the selected columns
+    for col in date_columns:
+        df[col] = df[col].map(utilities.to_ymd_string)
+
+    return df
+
+# make sure we have Y-m-d format strings
+df_attributes = transform_date_columns(df_attributes)
+df_roles = transform_date_columns(df_roles)
+
+df_attributes[["date_birth", "date_death"]] = df_attributes[["date_birth", "date_death"]].apply(pd.to_datetime, format='%Y-%m-%d', errors='coerce')
+df_roles[["date_start", "date_end"]] = df_roles[["date_start", "date_end"]].apply(pd.to_datetime, format='%Y-%m-%d', errors='coerce')
 
 # correct data where the start date is large than the end date
-start_end_condition = (df_roles['date_end'].notnull()) & (df_roles.date_start > df_roles.date_end)
+start_end_condition = (df_roles['date_end'].notnull()) & (df_roles['date_start'].notnull()) & (df_roles.date_start > df_roles.date_end)
 date_start_temp = df_roles.loc[start_end_condition, "date_start"]
 df_roles.loc[start_end_condition, "date_start"] = df_roles.loc[start_end_condition, "date_end"]
 df_roles.loc[start_end_condition, "date_end"] = date_start_temp
@@ -269,14 +309,22 @@ if args.csv:
 
 # df to sql, replace accordingly
 try:
+    # SQL connection
+    conn = utilities.connect_sqlite()
     log.info("Writing attributes table to SQL DB...")
     df_attributes.to_sql("attributes", con = conn, if_exists='replace')
     log.info("... successfully written!")
+    # close
+    conn.close()
 except Exception as e:
     log.error("... " + str(e))
 try:
+    # SQL connection
+    conn = utilities.connect_sqlite()
     log.info("Writing roles table to SQL DB")
     df_roles.to_sql("roles", con = conn, if_exists='replace')
     log.info("... successfully written!")
+    # close
+    conn.close()
 except Exception as e:
     log.error("... " + str(e))

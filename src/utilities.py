@@ -167,3 +167,27 @@ def add_mep_html_sqlite(html, mep_id, url=None, timestamp=None, insert_only_upda
     conn.commit()
     conn.close()
 
+
+def to_ymd_string(date_str):
+    """
+    This function takes a date string in "d-m-Y" format and returns it in "Y-m-d" format.
+    If the date string is already in "Y-m-d" format or cannot be parsed, it returns the original date string.
+    """
+
+    if not isinstance(date_str, str):
+        return date_str
+
+    try:
+        # Check if the date string is already in "Y-m-d" format
+        datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        return date_str
+    except ValueError:
+        pass
+
+    try:
+        # Try to convert from "d-m-Y" to "Y-m-d" format
+        date_obj = datetime.datetime.strptime(date_str, "%d-%m-%Y")
+        return date_obj.strftime("%Y-%m-%d")
+    except ValueError:
+        # If the date string cannot be parsed, return the original date string
+        return date_str

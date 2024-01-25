@@ -196,3 +196,5 @@ cython_debug/
 .idea/modules.xml
 .idea/vcs.xml
 
+/data/_*
+/data/mep3.db
