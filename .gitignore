@@ -198,5 +198,3 @@ cython_debug/
 
 /data/_*
 /data/mep3.db
-data/mep.db
-mep.db
