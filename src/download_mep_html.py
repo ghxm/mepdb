@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--parallel", action="store_true", default=False, help="Parallel processing")
 parser.add_argument("-v", "--verbose", action="count", default=0, help="Print out iterations in parallel processing")
 parser.add_argument("-n", "--njobs", default="auto", help="Number of parallel jobs")
-parser.add_argument('-e','--ep', nargs='+', help='EP numbers to download', default=range(1,10), required=False)
+parser.add_argument('-e','--ep', nargs='+', help='EP numbers to download', default=range(1,11), required=False)
 parser.add_argument("-r", "--replace", action="store_true", default=False, help = "Replace existing MEP pages in SQLite instead of adding new source entries")
 parser.add_argument("--days", type=int, default=30, help="Only re-download and update if last update is older than x days")
 parser.add_argument("-u", "--update-all", action="store_true", default=False,
@@ -58,7 +58,7 @@ conn = utilities.connect_sqlite()
 cur = conn.cursor()
 
 headers = {
-    'user-agent': 'EUPLEX-MEPDB webspider (spiders@euplex.org)',  # to identify the webspider vis a vis the server
+    'user-agent': 'mepdb',
     'accept-language': 'en-gb'}
 
 # Only select those not downloaded in the last x days if args.days is not None
