@@ -23,7 +23,9 @@ parser.add_argument("-c", "--csv", action="store_true", default=False, help="wri
 args = parser.parse_args()
 
 
-if args.parallel:
+if not args.parallel:
+    args.njobs = 1
+else:
     try:
         args.njobs = int(args.njobs)
     except:

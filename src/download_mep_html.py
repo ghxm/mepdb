@@ -35,16 +35,17 @@ args = parser.parse_args()
 
 log.info(args)
 
-if args.parallel:
+if not args.parallel:
+    args.njobs = 1
+else:
     try:
         args.njobs = int(args.njobs)
     except:
         if args.njobs == "auto":
-            args.njobs = int(joblib.cpu_count()) * 5 - 5
+            args.njobs = int(joblib.cpu_count())
         else:
             raise (Exception("No valid value for --njobs supplied"))
-else:
-    args.njobs = 1
+
 if not args.update_all:
     args.days = None
 
